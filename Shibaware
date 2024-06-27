@@ -1,0 +1,362 @@
+cal UILib = loadstring(game:HttpGet('https://raw.githubusercontent.com/StepBroFurious/Script/main/HydraHubUi.lua'))()
+local Window = UILib.new("Arsenal | Shibaware", game.Players.LocalPlayer.UserId, "Free")
+
+local Category1 = Window:Category("Main", "http://www.roblox.com/asset/?id=8395621517")
+local Category2 = Window:Category("Combat", "http://www.roblox.com/asset/?id=8395621517")
+local Category3 = Window:Category("Visual", "http://www.roblox.com/asset/?id=8395621517")
+
+local SubButton1 = Category1:Button("Main", "http://www.roblox.com/asset/?id=8395747586")
+local SubButton2 = Category2:Button("Combat", "http://www.roblox.com/asset/?id=8395747586")
+local SubButton3 = Category3:Button("Visuals", "http://www.roblox.com/asset/?id=8395747586")
+
+local Section1 = SubButton1:Section("Main", "Left")
+local Section2 = SubButton2:Section("Combat", "Left")
+local Section3 = SubButton3:Section("Visuals", "Left")
+
+local speedValue = 16  -- Default speed value
+local fovValue = 70  -- Default FOV value
+local hitboxSize = Vector3.new(2, 2, 1)  -- Default hitbox size
+local handChamsColor = Color3.new(1, 0, 0)  -- Default to red
+local gunChamsColor = Color3.new(0, 0, 1)   -- Default to blue
+
+Section1:Slider({
+    Title = "Walkspeed",
+    Description = "",
+    Default = 16,
+    Min = 0,
+    Max = 120
+}, function(value)
+    speedValue = value
+end)
+
+Section2:Slider({
+    Title = "Field of View",
+    Description = "Adjust the field of view",
+    Default = 70,
+    Min = 30,
+    Max = 120
+}, function(value)
+    fovValue = value
+    workspace.CurrentCamera.FieldOfView = fovValue
+end)
+
+-- Function to apply chams to hands
+local function applyHandChams(color)
+    local player = game.Players.LocalPlayer
+    local character = player.Character
+    if character then
+        for _, v in pairs(character:GetChildren()) do
+            if v:IsA("BasePart") and (v.Name == "RightHand" or v.Name == "LeftHand") then
+                v.Material = Enum.Material.Neon
+                v.Color = color
+            end
+        end
+    end
+end
+
+-- Function to apply chams to gun
+local function applyGunChams(color)
+    local player = game.Players.LocalPlayer
+    local character = player.Character
+    if character then
+        for _, v in pairs(character:GetChildren()) do
+            if v:IsA("Tool") then
+                for _, part in pairs(v:GetChildren()) do
+                    if part:IsA("BasePart") then
+                        part.Material = Enum.Material.Neon
+                        part.Color = color
+                    end
+                end
+            end
+        end
+    end
+end
+
+-- Add Hand Chams Color Picker
+Section2:ColorPicker({
+    Title = "Hand Chams Color",
+    Description = "Change the color of the hand chams",
+    Default = handChamsColor
+}, function(value)
+    handChamsColor = value
+    applyHandChams(handChamsColor)
+end)
+
+-- Add Gun Chams Color Picker
+Section2:ColorPicker({
+    Title = "Gun Chams Color",
+    Description = "Change the color of the gun chams",
+    Default = gunChamsColor
+}, function(value)
+    gunChamsColor = value
+    applyGunChams(gunChamsColor)
+end)
+
+-- CFrame speed hack function
+local function onHeartbeat()
+    local player = game.Players.LocalPlayer
+    local character = player.Character
+    if character and character:FindFirstChild("HumanoidRootPart") then
+        local hrp = character.HumanoidRootPart
+        local humanoid = character:FindFirstChildOfClass("Humanoid")
+        
+        if humanoid and humanoid.MoveDirection.Magnitude > 0 then
+            hrp.CFrame = hrp.CFrame + humanoid.MoveDirection * (speedValue / 16) -- Normalize speed to default WalkSpeed
+        end
+    end
+end
+
+-- Connect the heartbeat function to RunService
+game:GetService("RunService").Heartbeat:Connect(onHeartbeat)
+
+-- Infinite jump function
+local function enableInfiniteJump()
+    local player = game.Players.LocalPlayer
+    local userInputService = game:GetService("UserInputService")
+    
+    userInputService.JumpRequest:Connect(function()
+        if player.Character and player.Character:FindFirstChildOfClass("Humanoid") then
+            player.Character:FindFirstChildOfClass("Humanoid"):ChangeState("Jumping")
+        end
+    end)
+end
+
+-- Adding Infinite Jump Button
+Section1:Button({
+    Title = "Infinite Jump",
+    ButtonName = "Enable",
+    Description = "Enable infinite jump functionality",
+}, function()
+    enableInfiniteJump()
+end)
+
+-- Aimbot/Aimlock function and variables
+local aimlockEnabled = false
+local fovCircleRadius = 50
+local fovCircleColor = Color3.new(1, 0, 0) -- Default to red
+local fovCircle
+
+local function updateFOVCircle()
+    if fovCircle then
+        fovCircle.Radius = fovCircleRadius
+        fovCircle.Color = fovCircleColor
+    end
+end
+
+local function enableAimbot()
+    local player = game.Players.LocalPlayer
+    local mouse = player:GetMouse()
+    local userInputService = game:GetService("UserInputService")
+    local camera = workspace.CurrentCamera
+    
+    fovCircle = Drawing.new("Circle")
+    fovCircle.Radius = fovCircleRadius
+    fovCircle.Color = fovCircleColor
+    fovCircle.Thickness = 2
+    fovCircle.Visible = true
+    fovCircle.Transparency = 1
+    fovCircle.Position = Vector2.new(camera.ViewportSize.X / 2, camera.ViewportSize.Y / 2)
+    
+    userInputService.InputBegan:Connect(function(input)
+        if input.UserInputType == Enum.UserInputType.MouseButton2 then
+            aimlockEnabled = true
+        end
+    end)
+    
+    userInputService.InputEnded:Connect(function(input)
+        if input.UserInputType == Enum.UserInputType.MouseButton2 then
+            aimlockEnabled = false
+        end
+    end)
+    
+    game:GetService("RunService").RenderStepped:Connect(function()
+        if aimlockEnabled then
+            local closestTarget = nil
+            local shortestDistance = fovCircleRadius
+            
+            for _, v in pairs(game.Players:GetPlayers()) do
+                if v ~= player and v.Character and v.Character:FindFirstChild("HumanoidRootPart") then
+                    local pos = camera:WorldToViewportPoint(v.Character.HumanoidRootPart.Position)
+                    local distance = (Vector2.new(pos.X, pos.Y) - fovCircle.Position).Magnitude
+                    
+                    if distance < shortestDistance then
+                        closestTarget = v.Character.HumanoidRootPart.Position
+                        shortestDistance = distance
+                    end
+                end
+            end
+            
+            if closestTarget then
+                local pos = camera:WorldToViewportPoint(closestTarget)
+                mousemoverel(pos.x - mouse.x, pos.y - mouse.y)
+            end
+        end
+    end)
+end
+
+-- Adding Aimbot Button
+Section2:Button({
+    Title = "Aimbot",
+    ButtonName = "Enable",
+    Description = "Enable aimbot with right mouse button",
+}, function()
+    enableAimbot()
+end)
+
+-- Function to expand hitboxes
+local function expandHitboxes(size)
+    for _, player in pairs(game.Players:GetPlayers()) do
+        if player ~= game.Players.LocalPlayer and player.Character then
+            for _, part in pairs(player.Character:GetChildren()) do
+                if part:IsA("BasePart") then
+                    part.Size = size
+                    part.Transparency = 0.5
+                    part.Material = Enum.Material.Neon
+                    part.CanCollide = false
+                end
+            end
+        end
+    end
+end
+
+-- Adding Hitbox Expander Slider
+Section1:Slider({
+    Title = "Hitbox Size",
+    Description = "Adjust the size of the hitboxes",
+    Default = 2,
+    Min = 1,
+    Max = 10
+}, function(value)
+    hitboxSize = Vector3.new(value, value, value)
+    expandHitboxes(hitboxSize)
+end)
+
+-- Function to enable Box ESP
+local function enableBoxESP()
+    local players = game:GetService("Players")
+    local runService = game:GetService("RunService")
+    local camera = workspace.CurrentCamera
+
+    local function createESP(player)
+        if player == players.LocalPlayer then return end
+        
+        local box = Drawing.new("Square")
+        box.Thickness = 2
+        box.Color = Color3.fromRGB(0, 255, 255)
+        box.Filled = false
+        box.Transparency = 0.5
+        box.Visible = true
+
+        local healthBar = Drawing.new("Line")
+        healthBar.Thickness = 2
+        healthBar.Color = Color3.fromRGB(0, 255, 0)
+        healthBar.Transparency = 1
+        healthBar.Visible = true
+
+        local nameTag = Drawing.new("Text")
+        nameTag.Size = 20
+        nameTag.Color = Color3.fromRGB(255, 255, 255)
+        nameTag.Center = true
+        nameTag.Outline = true
+        nameTag.Transparency = 1
+        nameTag.Visible = true
+
+        local distanceTag = Drawing.new("Text")
+        distanceTag.Size = 20
+        distanceTag.Color = Color3.fromRGB(255, 255, 255)
+        distanceTag.Center = true
+        distanceTag.Outline = true
+        distanceTag.Transparency = 1
+        distanceTag.Visible = true
+
+        local function update()
+            local character = player.Character
+            if character and character:FindFirstChild("HumanoidRootPart") and character:FindFirstChild("Humanoid") then
+                local hrp = character.HumanoidRootPart
+                local pos = camera:WorldToViewportPoint(hrp.Position)
+                box.Size = Vector2.new(50, 100)
+                box.Position = Vector2.new(pos.X - box.Size.X / 2, pos.Y - box.Size.Y / 2)
+                box.Visible = true
+
+                healthBar.From = Vector2.new(box.Position.X - 5, box.Position.Y + box.Size.Y)
+                healthBar.To = Vector2.new(healthBar.From.X, healthBar.From.Y - (box.Size.Y * (character.Humanoid.Health / character.Humanoid.MaxHealth)))
+                healthBar.Visible = true
+
+                nameTag.Position = Vector2.new(box.Position.X + box.Size.X / 2, box.Position.Y - 20)
+                nameTag.Text = player.Name
+                nameTag.Visible = true
+
+                distanceTag.Position = Vector2.new(box.Position.X + box.Size.X / 2, box.Position.Y + box.Size.Y + 5)
+                local distance = (camera.CFrame.Position - hrp.Position).Magnitude
+                distanceTag.Text = string.format("%.0f studs", distance)
+                distanceTag.Visible = true
+            else
+                box.Visible = false
+                healthBar.Visible = false
+                nameTag.Visible = false
+                distanceTag.Visible = false
+            end
+        end
+
+        runService.RenderStepped:Connect(update)
+    end
+
+    for _, player in pairs(players:GetPlayers()) do
+        createESP(player)
+    end
+
+    players.PlayerAdded:Connect(createESP)
+end
+
+-- Adding Box ESP Button
+Section3:Button({
+    Title = "Box ESP",
+    ButtonName = "Enable",
+    Description = "Enable Box ESP with additional features",
+}, function()
+    enableBoxESP()
+end)
+
+-- FOV Circle Radius Slider
+Section2:Slider({
+    Title = "FOV Circle Radius",
+    Description = "Adjust the radius of the FOV circle",
+    Default = 50,
+    Min = 10,
+    Max = 300
+}, function(value)
+    fovCircleRadius = value
+    updateFOVCircle()
+end)
+
+-- FOV Circle Color Picker
+Section2:ColorPicker({
+    Title = "FOV Circle Color",
+    Description = "Change the color of the FOV circle",
+    Default = fovCircleColor
+}, function(value)
+    fovCircleColor = value
+    updateFOVCircle()
+end)
+
+-- Function to enable Yaw manipulation for Spinbot
+local function enableSpinbot()
+    local runService = game:GetService("RunService")
+    local player = game.Players.LocalPlayer
+
+    runService.RenderStepped:Connect(function()
+        if player.Character and player.Character:FindFirstChild("HumanoidRootPart") then
+            local hrp = player.Character.HumanoidRootPart
+            hrp.CFrame = hrp.CFrame * CFrame.Angles(0, math.rad(10), 0) -- Adjust the value to change spin speed
+        end
+    end)
+end
+
+-- Adding Spinbot Button
+Section2:Button({
+    Title = "Spinbot",
+    ButtonName = "Enable",
+    Description = "Enable Spinbot",
+}, function()
+    enableSpinbot()
+end)
